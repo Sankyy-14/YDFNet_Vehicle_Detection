@@ -1,0 +1,42 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Pretrained weights (auto-downloaded by ultralytics on first run — no need to commit)
+yolov10n.pt
+yolov10s.pt
+yolov10m.pt
+*.pt.orig
+
+# Trained checkpoints — these are large (10MB+ each). Uncomment the line below
+# to exclude ALL of them, or keep just your best one (epoch5) tracked manually.
+# checkpoints/*.pt
+
+# Stale/leftover checkpoints from earlier test runs — never needed
+checkpoints/ydfnet_epoch13.pt
+checkpoints/ydfnet_epoch14.pt
+checkpoints/ydfnet_epoch15.pt
+
+# Ultralytics YOLO video/image inference outputs (large, regenerable)
+runs/
+
+# Real dataset — NEVER commit this (10GB+, also not yours to redistribute —
+# UA-DETRAC has its own license/access terms)
+UA-DETRAC/
+*.jpg
+*.jpeg
+!samples/*.png
+!label_check.png
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# VS Code settings (optional — remove this line if you want to share your VS Code config with teammates)
+.vscode/
