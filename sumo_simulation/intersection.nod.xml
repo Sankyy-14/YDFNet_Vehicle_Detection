@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<nodes>
+    <node id="center" x="0.0" y="0.0" type="traffic_light"/>
+
+    <node id="north" x="0.0" y="100.0"/>
+    <node id="south" x="0.0" y="-100.0"/>
+    <node id="east"  x="100.0" y="0.0"/>
+    <node id="west"  x="-100.0" y="0.0"/>
+</nodes>

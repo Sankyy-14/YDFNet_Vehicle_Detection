@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<routes>
+
+    <!-- Vehicle type -->
+    <vType
+        id="car"
+        accel="2.6"
+        decel="4.5"
+        sigma="0.5"
+        length="5"
+        maxSpeed="13.9"
+        guiShape="passenger"/>
+
+    <!-- North -> South -->
+    <route
+        id="north_south"
+        edges="north_center center_south"/>
+
+    <!-- South -> North -->
+    <route
+        id="south_north"
+        edges="south_center center_north"/>
+
+    <!-- East -> West -->
+    <route
+        id="east_west"
+        edges="east_center center_west"/>
+
+    <!-- West -> East -->
+    <route
+        id="west_east"
+        edges="west_center center_east"/>
+
+
+    <!-- Traffic from North -->
+    <flow
+        id="flow_north"
+        type="car"
+        route="north_south"
+        begin="0"
+        end="1800"
+        vehsPerHour="600"/>
+
+    <!-- Traffic from South -->
+    <flow
+        id="flow_south"
+        type="car"
+        route="south_north"
+        begin="0"
+        end="1800"
+        vehsPerHour="400"/>
+
+    <!-- Traffic from East -->
+    <flow
+        id="flow_east"
+        type="car"
+        route="east_west"
+        begin="0"
+        end="1800"
+        vehsPerHour="800"/>
+
+    <!-- Traffic from West -->
+    <flow
+        id="flow_west"
+        type="car"
+        route="west_east"
+        begin="0"
+        end="1800"
+        vehsPerHour="300"/>
+
+</routes>

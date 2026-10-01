@@ -13,6 +13,10 @@ yolov10n.pt
 yolov10s.pt
 yolov10m.pt
 *.pt.orig
+yolov8l-world.pt
+yolov8s-world.pt
+weights/
+tripinfo_temp.xml
 
 # Trained checkpoints — these are large (10MB+ each). Uncomment the line below
 # to exclude ALL of them, or keep just your best one (epoch5) tracked manually.
@@ -40,3 +44,7 @@ Thumbs.db
 
 # VS Code settings (optional — remove this line if you want to share your VS Code config with teammates)
 .vscode/
+yolov8l-world.pt
+yolov8s-world.pt
+weights/
+tripinfo_temp.xml

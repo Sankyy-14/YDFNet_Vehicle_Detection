@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<edges>
+
+    <edge id="north_center"
+          from="north"
+          to="center"
+          priority="1"
+          numLanes="1"
+          speed="13.9"/>
+
+    <edge id="south_center"
+          from="south"
+          to="center"
+          priority="1"
+          numLanes="1"
+          speed="13.9"/>
+
+    <edge id="east_center"
+          from="east"
+          to="center"
+          priority="1"
+          numLanes="1"
+          speed="13.9"/>
+
+    <edge id="west_center"
+          from="west"
+          to="center"
+          priority="1"
+          numLanes="1"
+          speed="13.9"/>
+
+    <edge id="center_north"
+          from="center"
+          to="north"
+          priority="1"
+          numLanes="1"
+          speed="13.9"/>
+
+    <edge id="center_south"
+          from="center"
+          to="south"
+          priority="1"
+          numLanes="1"
+          speed="13.9"/>
+
+    <edge id="center_east"
+          from="center"
+          to="east"
+          priority="1"
+          numLanes="1"
+          speed="13.9"/>
+
+    <edge id="center_west"
+          from="center"
+          to="west"
+          priority="1"
+          numLanes="1"
+          speed="13.9"/>
+
+</edges>

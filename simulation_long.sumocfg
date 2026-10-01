@@ -1,0 +1,14 @@
+<configuration>
+    <input>
+        <net-file value="network.net.xml"/>
+        <route-files value="routes_long.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="3000"/>
+    </time>
+    <report>
+        <no-step-log value="true"/>
+        <duration-log.disable value="true"/>
+    </report>
+</configuration>
