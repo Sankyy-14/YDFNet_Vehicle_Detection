@@ -4,3 +4,4 @@ numpy
 pandas
 scikit-learn
 xgboost
+imageio-ffmpeg

@@ -1,0 +1,13 @@
+{
+  "source": "WhatsApp Video 2026-10-04 at 2.03.03 PM.mp4",
+  "duration_s": 27.6,
+  "unique_vehicles": 107,
+  "by_class": {
+    "truck": 10,
+    "car": 96,
+    "bus": 1
+  },
+  "measured_veh_per_hour": 13951,
+  "used_veh_per_hour": 9000,
+  "clamped": true
+}

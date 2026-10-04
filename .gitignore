@@ -48,3 +48,9 @@ yolov8l-world.pt
 yolov8s-world.pt
 weights/
 tripinfo_temp.xml
+
+# Created by the video upload feature
+uploads/
+routes_uploaded.rou.xml
+trips_uploaded.trips.xml
+simulation_uploaded.sumocfg
