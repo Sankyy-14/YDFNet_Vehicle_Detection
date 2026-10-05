@@ -69,9 +69,16 @@ def area_key(bbox) -> str:
 
 
 def _tools() -> Path:
-    home = os.environ.get("SUMO_HOME")
-    if not home:
-        raise RuntimeError("SUMO_HOME is not set.")
+    # Falls back to /usr/share/sumo, matching every other module in this
+    # project (run_policy.py, policy_generator.py, map_section.py). On
+    # Streamlit Cloud's container, "apt-get install sumo sumo-tools" puts
+    # SUMO there but never sets the SUMO_HOME environment variable, so
+    # requiring it outright (as this used to) failed there even though SUMO
+    # was correctly installed. Local Windows installs of SUMO do set
+    # SUMO_HOME, which is why this only showed up after deploying.
+    home = os.environ.get("SUMO_HOME", "/usr/share/sumo")
+    if not Path(home).is_dir():
+        raise RuntimeError(f"SUMO_HOME ({home}) does not exist. Is SUMO installed?")
     return Path(home) / "tools"
 
 
