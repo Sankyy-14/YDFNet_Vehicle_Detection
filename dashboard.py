@@ -9,8 +9,7 @@ Run with:
     streamlit run dashboard.py
 """
 from __future__ import annotations
-from detection_panel import render_detection_section
-from video_upload import render_video_upload
+from pathlib import Path
 
 import streamlit as st
 import pandas as pd
@@ -20,8 +19,20 @@ import plotly.graph_objects as go
 from policy_generator import probe_network, generate_candidate_policies
 from scoring_engine import rank_policies
 from traffic_prediction import train_predictor, predict_congestion_level, N_LAGS
+from detection_panel import render_detection_section
+from video_upload import render_video_upload
+from map_section import render_map_section
 
 st.set_page_config(page_title="EmergeRoute", layout="wide", initial_sidebar_state="collapsed")
+
+UPLOADED_CFG = "simulation_uploaded.sumocfg"
+SCENARIO_NAMES = {
+    "simulation.sumocfg": "Light traffic",
+    "simulation_heavy_stable.sumocfg": "Heavy congestion",
+    "simulation_realistic.sumocfg": "Realistic (varying) traffic",
+    "simulation_heavy.sumocfg": "Gridlock (worst-case)",
+    UPLOADED_CFG: "Uploaded video",
+}
 
 # ---------------------------------------------------------------------------
 # Theme + scroll-reveal (pure CSS, no JS -- Streamlit strips <script> tags
@@ -121,6 +132,20 @@ st.markdown("""
     }
     .event-row b { color: #fbbf24; }
 
+    .car-grid { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 0.8rem; margin-bottom: 1rem; }
+    @media (max-width: 900px) { .car-grid { grid-template-columns: 1fr; } }
+    .car-card { background-color: #121722; border: 1px solid #1f2430; border-radius: 10px; padding: 1rem 1.2rem; }
+    .car-body { font-size: 0.95rem; color: #e6e9ef; line-height: 1.5; }
+    .src-tag { display: inline-block; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+               color: #93c5fd; border: 1px solid #1e3a5f; border-radius: 4px; padding: 0.05rem 0.4rem; margin-left: 0.4rem; }
+    .delta-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 0.4rem 0 1rem 0; }
+    .delta-table th { text-align: left; font-weight: 500; font-size: 0.75rem; color: #8b93a7; text-transform: uppercase;
+                      letter-spacing: 0.04em; padding: 0.5rem 0.8rem; border-bottom: 1px solid #1f2430; }
+    .delta-table td { padding: 0.55rem 0.8rem; border-bottom: 1px solid #1a2030; color: #d8dce6; }
+    .delta-good { color: #4ade80; font-weight: 600; }
+    .delta-bad { color: #f87171; font-weight: 600; }
+    .delta-flat { color: #8b93a7; }
+
     div[data-testid="stExpander"] {
         background-color: #121722;
         border: 1px solid #1f2430;
@@ -128,15 +153,24 @@ st.markdown("""
     }
 
     /* Scroll-driven reveal: subtle fade + rise, triggered natively by the
-       browser as each section enters the viewport. No JS, nothing fake. */
-    .reveal {
-        animation: reveal-in linear both;
-        animation-timeline: view();
-        animation-range: entry 0% cover 25%;
-    }
-    @keyframes reveal-in {
-        from { opacity: 0; transform: translateY(14px); }
-        to   { opacity: 1; transform: translateY(0); }
+       browser as each section enters the viewport. No JS, nothing fake.
+       Visible by default -- the animation only applies on browsers that
+       support animation-timeline: view() (recent Chrome/Brave). Without
+       this @supports guard, animation-fill-mode: both freezes every
+       .reveal element at its 0%-opacity starting frame on any browser
+       that doesn't support the timeline, which is what caused the blank
+       page: the animation never starts, so it never gets past "invisible." */
+    .reveal { opacity: 1; }
+    @supports (animation-timeline: view()) {
+        .reveal {
+            animation: reveal-in linear both;
+            animation-timeline: view();
+            animation-range: entry 0% cover 25%;
+        }
+        @keyframes reveal-in {
+            from { opacity: 0; transform: translateY(14px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -145,28 +179,75 @@ st.title("EmergeRoute")
 st.caption("AI-based traffic policy generation. Proposes, simulates, and ranks traffic-control actions before recommending one.")
 
 # ---------------------------------------------------------------------------
-# Top control bar (replaces the sidebar). Plain columns, inline with content.
+# Real-Area Traffic Map -- first thing on the page, ahead of the synthetic
+# scenario pipeline below, since it's the entry point for a real place.
 # ---------------------------------------------------------------------------
+st.markdown('<div class="reveal">', unsafe_allow_html=True)
+render_map_section()
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# How it works -- explains the synthetic-scenario pipeline before its
+# controls appear right below.
+# ---------------------------------------------------------------------------
+st.markdown('<div class="reveal">', unsafe_allow_html=True)
+st.header("How it works")
+steps = [
+    ("01", "Probe the network", "A short live SUMO simulation measures real queue lengths at every traffic-light intersection -- no guessing which ones are busiest."),
+    ("02", "Predict (optional)", "XGBoost, trained on your own logged simulation history, forecasts near-future congestion so the system can act proactively instead of only reacting."),
+    ("03", "Generate candidates", "A rule-based policy generator proposes several explainable traffic-control actions: signal timing extensions, network-wide adjustments, emergency corridors."),
+    ("04", "Simulate every candidate", "Each candidate policy is tested end-to-end in a full SUMO simulation run -- real results, not estimates."),
+    ("05", "Score with NSGA-II", "Every candidate is ranked across six objectives at once: congestion, travel time, safety, emergency delay, emissions, and fairness."),
+    ("06", "Recommend, with reasons", "The top policy is surfaced with a plain-language explanation of why it was chosen over the alternatives."),
+]
+step_cols = st.columns(3)
+for i, (num, title, desc) in enumerate(steps):
+    with step_cols[i % 3]:
+        st.markdown(f"""
+        <div class="card">
+            <div class="card-label">Step {num}</div>
+            <div style="font-size:1.05rem; font-weight:600; color:#f2f4f8; margin-bottom:0.4rem;">{title}</div>
+            <div style="font-size:0.85rem; color:#aab1c2; line-height:1.4;">{desc}</div>
+        </div>
+        """, unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Policy generation -- the synthetic-scenario control bar, now positioned
+# under "How it works" rather than above it.
+# ---------------------------------------------------------------------------
+scenario_options = [
+    "simulation.sumocfg",
+    "simulation_heavy_stable.sumocfg",
+    "simulation_realistic.sumocfg",
+    "simulation_heavy.sumocfg",
+]
+if Path(UPLOADED_CFG).exists():
+    scenario_options.append(UPLOADED_CFG)
+
 with st.container():
     st.markdown('<div class="topbar">', unsafe_allow_html=True)
     c1, c2, c3 = st.columns([2, 2, 1])
     with c1:
         sumocfg = st.selectbox(
             "Traffic scenario",
-            options=["simulation.sumocfg", "simulation_heavy_stable.sumocfg", "simulation_realistic.sumocfg", "simulation_heavy.sumocfg"] + (["simulation_uploaded.sumocfg"] if __import__("pathlib").Path("simulation_uploaded.sumocfg").exists() else []),
-            format_func=lambda x: {
-                "simulation.sumocfg": "Light traffic",
-                "simulation_heavy_stable.sumocfg": "Heavy congestion",
-                "simulation_realistic.sumocfg": "Realistic (varying) traffic",
-                "simulation_heavy.sumocfg": "Gridlock (worst-case)",
-            }.get(x, "Uploaded video"),
+            options=scenario_options,
+            format_func=lambda x: SCENARIO_NAMES.get(x, "Uploaded video"),
         )
     with c2:
-        use_prediction = st.checkbox(
-            "Use AI prediction (XGBoost) to set congestion level",
-            value=True,
-            help="Predicts near-future congestion from recent traffic history, instead of setting it manually.",
-        )
+        if sumocfg == UPLOADED_CFG:
+            # The XGBoost model is trained on the other scenarios' logs, so it
+            # would not say anything real about an uploaded video.
+            st.caption("AI prediction is off for uploaded videos (the model was trained on other scenarios). Set the level below.")
+            use_prediction = False
+        else:
+            use_prediction = st.checkbox(
+                "Use AI prediction (XGBoost) to set congestion level",
+                value=True,
+                help="Predicts near-future congestion from recent traffic history, instead of setting it manually.",
+            )
         if not use_prediction:
             congestion_level = st.select_slider(
                 "Congestion level",
@@ -185,8 +266,34 @@ def metric_card(label: str, value: str):
     st.markdown(f'<div class="card"><div class="card-label">{label}</div><div class="card-value">{value}</div></div>', unsafe_allow_html=True)
 
 
+def render_metric_cards(m):
+    """Eight metric cards in two rows of four."""
+    rows = [
+        [("Congestion delay", f"{m['avg_time_loss_s']:.0f}s"),
+         ("Avg travel time", f"{m['avg_travel_time_s']:.0f}s"),
+         ("Worst-case wait", f"{m['max_waiting_time_s']:.0f}s"),
+         ("CO2 emitted", f"{m['co2_kg']:.1f}kg")],
+        [("Fairness gap", f"{m['fairness_gap_s']:.0f}s"),
+         ("Trips completed", str(m["completed_trips"])),
+         ("Safety events", str(m.get("safety_events", 0))),
+         ("Emergency delay", f"{m.get('emergency_delay_s', 0):.0f}s")],
+    ]
+    for row in rows:
+        for col, (label, value) in zip(st.columns(4), row):
+            with col:
+                metric_card(label, value)
+    if m.get("emergency_vehicles_measured", 1) == 0:
+        st.caption("No emergency vehicle was measured in this run, so emergency delay shows 0 for every policy.")
+
+
 def stat_pill(label: str, value):
     return f'<div class="stat-pill">{label}: <b>{value}</b></div>'
+
+
+def render_video_sections():
+    """Video upload + detection output. Shown in both the landing and results views."""
+    render_video_upload()
+    render_detection_section()
 
 
 PLOTLY_DARK = dict(
@@ -220,12 +327,7 @@ if run_button:
     with st.spinner(f"Testing {len(candidates)} candidate policies in SUMO simulation. This may take a few minutes..."):
         ranked = rank_policies(candidates, sumocfg=sumocfg)
 
-    scenario_label = {
-        "simulation.sumocfg": "Light traffic",
-        "simulation_heavy_stable.sumocfg": "Heavy congestion",
-        "simulation_realistic.sumocfg": "Realistic (varying) traffic",
-        "simulation_heavy.sumocfg": "Gridlock (worst-case)",
-    }.get(sumocfg, "Uploaded video")
+    scenario_label = SCENARIO_NAMES.get(sumocfg, "Uploaded video")
     pareto_count = sum(1 for e in ranked if e["pareto_optimal"])
 
     st.markdown('<div class="reveal">', unsafe_allow_html=True)
@@ -291,17 +393,74 @@ if run_button:
     st.markdown('<div class="reveal">', unsafe_allow_html=True)
     st.header("Recommended Policy")
     top = ranked[0]
+    baseline = next((e for e in ranked if e["policy_name"].lower().startswith("baseline")), None)
     st.markdown(f"### {top['policy_name']}")
-    st.markdown(f'<div class="status-banner ok">{top["explanation"]}</div>', unsafe_allow_html=True)
+
+    # Condition / Action / Reason, all taken from this run's results
+    cond_queues = ", ".join(f"{t} ({probe['queue_totals'][t]})" for t in busiest_tls[:3])
+    if use_prediction:
+        level_txt = f"predicted near-future congestion <b>{congestion_level.upper()}</b>"
+        cond_tag = "Simulated, predicted"
+    else:
+        level_txt = f"congestion level set to <b>{congestion_level.upper()}</b>"
+        cond_tag = "Simulated"
+    st.markdown(f"""
+    <div class="car-grid">
+      <div class="car-card">
+        <div class="card-label">Condition<span class="src-tag">{cond_tag}</span></div>
+        <div class="car-body">Longest measured queues at {cond_queues}; {level_txt}.</div>
+      </div>
+      <div class="car-card">
+        <div class="card-label">Action<span class="src-tag">Derived</span></div>
+        <div class="car-body"><b>{top['policy_name']}</b></div>
+      </div>
+      <div class="car-card">
+        <div class="card-label">Reason<span class="src-tag">Derived</span></div>
+        <div class="car-body">{top['explanation']}</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     m = top["metrics"]
-    cols = st.columns(6)
-    with cols[0]: metric_card("Congestion delay", f"{m['avg_time_loss_s']:.0f}s")
-    with cols[1]: metric_card("Avg travel time", f"{m['avg_travel_time_s']:.0f}s")
-    with cols[2]: metric_card("Worst-case wait", f"{m['max_waiting_time_s']:.0f}s")
-    with cols[3]: metric_card("CO2 emitted", f"{m['co2_kg']:.1f}kg")
-    with cols[4]: metric_card("Fairness gap", f"{m['fairness_gap_s']:.0f}s")
-    with cols[5]: metric_card("Trips completed", str(m["completed_trips"]))
+    render_metric_cards(m)
+
+    # Change against the do-nothing baseline
+    if baseline is not None and baseline is top:
+        st.markdown('<div class="status-banner">No tested change beat the baseline in this run, so the recommendation is to leave the signals as they are.</div>', unsafe_allow_html=True)
+    elif baseline is not None:
+        bm = baseline["metrics"]
+        delta_rows = [
+            ("Congestion delay", "avg_time_loss_s", "s", True, 0),
+            ("Avg travel time", "avg_travel_time_s", "s", True, 0),
+            ("Worst-case wait", "max_waiting_time_s", "s", True, 0),
+            ("CO2 emitted", "co2_kg", "kg", True, 1),
+            ("Fairness gap", "fairness_gap_s", "s", True, 0),
+            ("Trips completed", "completed_trips", "", False, 0),
+            ("Safety events", "safety_events", "", True, 0),
+            ("Emergency delay", "emergency_delay_s", "s", True, 0),
+        ]
+        body = ""
+        for label, key, unit, lower_better, dec in delta_rows:
+            b, r = bm.get(key, 0), m.get(key, 0)
+            d = r - b
+            pct = (d / b * 100) if b else 0.0
+            if abs(pct) < 0.5:
+                cls = "delta-flat"
+            else:
+                improved = (d < 0) if lower_better else (d > 0)
+                cls = "delta-good" if improved else "delta-bad"
+            body += (
+                f"<tr><td>{label}</td><td>{b:.{dec}f}{unit}</td><td>{r:.{dec}f}{unit}</td>"
+                f'<td class="{cls}">{d:+.{dec}f}{unit} ({pct:+.1f}%)</td></tr>'
+            )
+        st.markdown(
+            '<div class="card-label" style="margin-top:0.8rem;">Change vs baseline (no changes)<span class="src-tag">Derived</span></div>'
+            '<table class="delta-table"><tr><th>Metric</th><th>Baseline</th><th>Recommended</th><th>Change</th></tr>'
+            + body + '</table>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div class="status-banner">Scope: values come from SUMO simulation runs. Recommendations are decision support and are not applied to real traffic signals.</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # -----------------------------------------------------------------
@@ -379,14 +538,13 @@ if run_button:
                 st.markdown('<span class="pareto-tag">PARETO-OPTIMAL</span>', unsafe_allow_html=True)
             st.write(entry["explanation"])
             m = entry["metrics"]
-            c = st.columns(6)
-            with c[0]: metric_card("Congestion delay", f"{m['avg_time_loss_s']:.0f}s")
-            with c[1]: metric_card("Avg travel time", f"{m['avg_travel_time_s']:.0f}s")
-            with c[2]: metric_card("Worst-case wait", f"{m['max_waiting_time_s']:.0f}s")
-            with c[3]: metric_card("CO2 emitted", f"{m['co2_kg']:.1f}kg")
-            with c[4]: metric_card("Fairness gap", f"{m['fairness_gap_s']:.0f}s")
-            with c[5]: metric_card("Trips completed", str(m["completed_trips"]))
+            render_metric_cards(m)
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # -----------------------------------------------------------------
+    # Video upload + vehicle detection (also shown in the landing view)
+    # -----------------------------------------------------------------
+    render_video_sections()
 
     st.caption(
         "Policies are tested via real SUMO simulation (not simulated results) and ranked "
@@ -405,31 +563,12 @@ else:
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="reveal">', unsafe_allow_html=True)
-    st.header("How it works")
-    steps = [
-        ("01", "Probe the network", "A short live SUMO simulation measures real queue lengths at every traffic-light intersection -- no guessing which ones are busiest."),
-        ("02", "Predict (optional)", "XGBoost, trained on your own logged simulation history, forecasts near-future congestion so the system can act proactively instead of only reacting."),
-        ("03", "Generate candidates", "A rule-based policy generator proposes several explainable traffic-control actions: signal timing extensions, network-wide adjustments, emergency corridors."),
-        ("04", "Simulate every candidate", "Each candidate policy is tested end-to-end in a full SUMO simulation run -- real results, not estimates."),
-        ("05", "Score with NSGA-II", "Every candidate is ranked across six objectives at once: congestion, travel time, safety, emergency delay, emissions, and fairness."),
-        ("06", "Recommend, with reasons", "The top policy is surfaced with a plain-language explanation of why it was chosen over the alternatives."),
-    ]
-    step_cols = st.columns(3)
-    for i, (num, title, desc) in enumerate(steps):
-        with step_cols[i % 3]:
-            st.markdown(f"""
-            <div class="card">
-                <div class="card-label">Step {num}</div>
-                <div style="font-size:1.05rem; font-weight:600; color:#f2f4f8; margin-bottom:0.4rem;">{title}</div>
-                <div style="font-size:0.85rem; color:#aab1c2; line-height:1.4;">{desc}</div>
-            </div>
-            """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Video upload + vehicle detection
+    render_video_sections()
 
     st.markdown('<div class="reveal">', unsafe_allow_html=True)
     st.header("Built on")
-    stack = ["SUMO", "Python", "pymoo (NSGA-II)", "XGBoost", "Streamlit", "Plotly"]
+    stack = ["SUMO", "Python", "pymoo (NSGA-II)", "XGBoost", "Streamlit", "Plotly", "Folium"]
     st.markdown(
         '<div class="stat-bar">' + "".join(f'<div class="stat-pill">{s}</div>' for s in stack) + '</div>',
         unsafe_allow_html=True,
@@ -440,6 +579,3 @@ else:
     </div>
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-
-render_video_upload()
-render_detection_section()
