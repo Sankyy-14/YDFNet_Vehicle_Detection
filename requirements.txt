@@ -5,4 +5,8 @@ pandas
 scikit-learn
 xgboost
 imageio-ffmpeg
-plotlypyproj
+plotly
+pyproj
+folium
+streamlit-folium
+requests
