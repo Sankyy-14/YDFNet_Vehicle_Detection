@@ -28,7 +28,11 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-MAX_AREA_KM2 = 4.0   # bigger areas make slow runs and Overpass timeouts
+MAX_AREA_KM2 = 20.0  # a dense city center / a couple of connected districts.
+                      # Bigger than this risks slow Overpass downloads, long
+                      # netconvert/randomTrips runs, and -- the real limit --
+                      # SUMO simulating the whole network per policy candidate
+                      # taking too long or too much memory on a free-tier host.
 MIN_AREA_KM2 = 0.1
 SIM_END_S = 1000      # matches run_policy.py's default simulation length
 
@@ -41,7 +45,9 @@ OVERPASS_MIRRORS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://z.overpass-api.de/api/interpreter",
 ]
-DOWNLOAD_TIMEOUT_S = 180   # per mirror attempt
+DOWNLOAD_TIMEOUT_S = 240   # per mirror attempt -- raised alongside MAX_AREA_KM2,
+                            # since a 20 km2 query returns a lot more data than
+                            # the old 4 km2 cap did
 
 
 def area_km2(west: float, south: float, east: float, north: float) -> float:
