@@ -28,6 +28,8 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import requests
+
 MAX_AREA_KM2 = 20.0  # a dense city center / a couple of connected districts.
                       # Bigger than this risks slow Overpass downloads, long
                       # netconvert/randomTrips runs, and -- the real limit --
@@ -98,34 +100,47 @@ def _run(cmd, what, timeout=600):
     return r
 
 
-def _download_streets(bbox, folder: Path, tools: Path, log) -> Path:
-    """Downloads the area's streets from OpenStreetMap, trying each mirror in
-    OVERPASS_MIRRORS in turn. Returns the path to the downloaded OSM file.
-    Raises RuntimeError only once every mirror has failed."""
+def _download_streets(bbox, folder: Path, log) -> Path:
+    """Downloads the area's streets directly from the Overpass API using the
+    `requests` library, trying each mirror in OVERPASS_MIRRORS in turn.
+
+    This used to shell out to SUMO's osmGet.py in a subprocess, which uses
+    Python's urllib for its own HTTP request. On some hosts that path gets
+    blocked at the network level (seen as every mirror failing identically
+    with "Connection refused") even though ordinary `requests` calls -- like
+    the place-name search above, built on the same library -- go through
+    fine. Doing the download with `requests` here keeps it on the one
+    networking path already proven to work on a given deployment.
+
+    Returns the path to the downloaded OSM XML file. Raises RuntimeError
+    only once every mirror has failed."""
     west, south, east, north = bbox
+    # Only road ways plus the nodes they reference (">;" recurses down to
+    # them) -- enough for netconvert to build a drivable network, including
+    # traffic-signal nodes, without pulling down buildings/land-use/POI data
+    # the old osmGet.py call also didn't fetch by default.
+    query = f'[out:xml][timeout:200];(way["highway"]({south},{west},{north},{east});>;);out meta;'
+
     last_error: Exception | None = None
     for i, url in enumerate(OVERPASS_MIRRORS, start=1):
         log(f"Downloading streets from OpenStreetMap (server {i}/{len(OVERPASS_MIRRORS)})...")
-        # Clear any partial file a previous failed mirror left behind, so the
-        # size/existence check below reflects only this attempt.
-        for leftover in folder.glob("area_bbox.osm.xml*"):
-            leftover.unlink(missing_ok=True)
         try:
-            _run(
-                [sys.executable, str(tools / "osmGet.py"), "--bbox", f"{west},{south},{east},{north}",
-                 "--prefix", "area", "--output-dir", str(folder), "--url", url],
-                f"Street download (server {i}/{len(OVERPASS_MIRRORS)})",
-                timeout=DOWNLOAD_TIMEOUT_S,
+            r = requests.post(
+                url, data={"data": query}, timeout=DOWNLOAD_TIMEOUT_S,
+                headers={"User-Agent": "EmergeRoute-student-project/1.0"},
             )
-        except RuntimeError as e:
+            r.raise_for_status()
+        except requests.RequestException as e:
             last_error = e
             log(f"  server {i} failed ({e}); trying the next one...")
             continue
-        osm_files = sorted(folder.glob("area_bbox.osm.xml*"))
-        if osm_files and osm_files[0].stat().st_size >= 500:
-            return osm_files[0]
-        last_error = RuntimeError("that server returned no usable street data")
-        log(f"  server {i} returned no street data; trying the next one...")
+        if len(r.content) < 500:
+            last_error = RuntimeError("that server returned no usable street data")
+            log(f"  server {i} returned no street data; trying the next one...")
+            continue
+        osm_path = folder / "area_bbox.osm.xml"
+        osm_path.write_bytes(r.content)
+        return osm_path
 
     raise RuntimeError(
         f"Could not download streets from any of {len(OVERPASS_MIRRORS)} OpenStreetMap servers "
@@ -161,7 +176,7 @@ def build_area(bbox, vph: int = 1800, out_root: str = "areas", log=print) -> dic
     tools = _tools()
 
     if not net.exists():
-        osm_file = _download_streets(bbox, folder, tools, log)
+        osm_file = _download_streets(bbox, folder, log)
 
         log("Building the road network...")
         _run(["netconvert", "--osm-files", str(osm_file), "-o", str(net),
