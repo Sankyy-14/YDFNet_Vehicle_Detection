@@ -11,3 +11,4 @@ streamlit-folium
 requests
 opencv-python-headless
 ultralytics
+git+https://github.com/ultralytics/CLIP.git
