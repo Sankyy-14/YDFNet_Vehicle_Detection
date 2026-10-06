@@ -9,4 +9,4 @@ plotly
 pyproj
 folium
 streamlit-folium
-requests
+requestsopencv-python-headless
