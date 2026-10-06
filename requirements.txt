@@ -10,3 +10,4 @@ folium
 streamlit-folium
 requests
 opencv-python-headless
+ultralytics
