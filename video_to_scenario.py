@@ -68,7 +68,7 @@ def main(source: str, scale: float = 1.0):
     cfg_text = Path(TEMPLATE_CFG).read_text()
     m = re.search(r'<end value="([\d.]+)"', cfg_text)
     end = m.group(1) if m else "600"
-    tools = Path(os.environ["SUMO_HOME"]) / "tools" / "randomTrips.py"
+    tools = Path(os.environ.get("SUMO_HOME", "/usr/share/sumo")) / "tools" / "randomTrips.py"
     subprocess.run([sys.executable, str(tools), "-n", NET, "-r", "routes_uploaded.rou.xml",
                     "-o", "trips_uploaded.trips.xml", "-b", "0", "-e", end,
                     "-p", f"{period:.3f}"], check=True)
