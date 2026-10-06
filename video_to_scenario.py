@@ -31,7 +31,7 @@ def main(source: str, scale: float = 1.0):
     fps = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
 
-    model = YOLO('yolov8l-world.pt')
+    model = YOLO('yolov8s-world.pt')
     model.set_classes(CLASSES)
 
     seen = {}          # track id -> class name (first seen)
