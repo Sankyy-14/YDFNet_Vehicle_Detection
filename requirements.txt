@@ -12,3 +12,4 @@ requests
 opencv-python-headless
 ultralytics
 git+https://github.com/ultralytics/CLIP.git
+lap>=0.5.12

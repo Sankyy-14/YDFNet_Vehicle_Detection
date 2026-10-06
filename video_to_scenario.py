@@ -37,7 +37,7 @@ def main(source: str, scale: float = 1.0):
     seen = {}          # track id -> class name (first seen)
     log = []
     for i, r in enumerate(model.track(source, stream=True, persist=True, conf=CONF,
-                                      tracker="bytetrack.yaml", save=True, device=0)):
+                                      tracker="bytetrack.yaml", save=True, device='cpu')):
         counts = {}
         ids = r.boxes.id.tolist() if r.boxes.id is not None else [None] * len(r.boxes)
         for tid, c in zip(ids, r.boxes.cls.tolist()):
