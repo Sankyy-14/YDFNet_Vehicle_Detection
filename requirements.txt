@@ -6,7 +6,7 @@ scikit-learn
 xgboost
 imageio-ffmpeg
 plotly
-pyproj
 folium
 streamlit-folium
-requestsopencv-python-headless
+requests
+opencv-python-headless
